@@ -1,0 +1,1734 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logic Gate Simulator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        /* Custom scrollbar for webkit browsers */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; /* slate-300 */
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; /* slate-400 */
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9; /* slate-100 */
+        }
+
+        /* Styles for the main SVG canvas */
+        #canvas-container {
+            background-color: #f8fafc; /* slate-50 */
+            background-image: 
+                linear-gradient(rgba(100, 116, 139, 0.1) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(100, 116, 139, 0.1) 1px, transparent 1px);
+            background-size: 20px 20px;
+            cursor: grab;
+        }
+        #canvas-container:active {
+            cursor: grabbing;
+        }
+
+        /* Component and node styling */
+        .gate-body {
+            stroke: #334155; /* slate-700 */
+            stroke-width: 2px;
+            fill: white;
+            cursor: move;
+        }
+        .gate-body:hover {
+            filter: drop-shadow(0 4px 3px rgb(0 0 0 / 0.1));
+        }
+        
+        .node {
+            fill: white;
+            stroke: #3b82f6; /* blue-500 */
+            stroke-width: 2px;
+            cursor: crosshair;
+            transition: fill 0.1s ease;
+        }
+        .node:hover {
+            fill: #3b82f6; /* blue-500 */
+        }
+        .node-output {
+            stroke: #ef4444; /* red-500 */
+        }
+        .node-output:hover {
+            fill: #ef4444; /* red-500 */
+        }
+        
+        .wire {
+            fill: none;
+            stroke: #64748b; /* slate-500 */
+            stroke-width: 3px;
+            stroke-linecap: round;
+        }
+        .wire-logic-1 {
+            stroke: #22c55e; /* green-500 */
+            stroke-dasharray: 2 2;
+            animation: dash 0.5s linear infinite;
+        }
+        .wire-temp {
+            stroke: #3b82f6; /* blue-500 */
+            stroke-width: 3px;
+            stroke-dasharray: 5 5;
+        }
+        
+        @keyframes dash {
+            to { stroke-dashoffset: -100; }
+        }
+
+        /* Bulb styling */
+        .bulb-off { fill: #d1d5db; /* gray-300 */ }
+        .bulb-on { 
+            fill: #facc15; /* yellow-400 */
+            filter: drop-shadow(0 0 8px #facc15);
+        }
+
+        /* Switch styling */
+        .switch-body {
+            fill: #e5e7eb; /* gray-200 */
+            stroke: #6b7280; /* gray-500 */
+            stroke-width: 2px;
+            rx: 10px;
+        }
+        .switch-toggle {
+            fill: #6b7280; /* gray-500 */
+            stroke: #4b5563; /* gray-600 */
+            stroke-width: 1px;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        .switch-toggle-on {
+            transform: translateX(30px);
+            fill: #22c55e; /* green-500 */
+        }
+        
+        /* Tooltip styling */
+        [data-tooltip] {
+            position: relative;
+        }
+        [data-tooltip]:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            left: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-left: 12px;
+            background-color: #1f2937; /* gray-800 */
+            color: white;
+            font-size: 0.875rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            white-space: nowrap;
+            z-index: 50;
+            pointer-events: none;
+            opacity: 1;
+            transition: opacity 0.2s;
+        }
+        
+    </style>
+</head>
+
+<body class="flex h-screen w-screen bg-white font-sans overflow-hidden">
+
+    <aside class="w-56 bg-slate-100 border-r border-slate-200 shadow-lg z-20 overflow-y-auto">
+        <div class="p-4 text-xl font-bold text-slate-700 border-b border-slate-200">
+            🧠 Logic Gates
+        </div>
+        <nav class="p-4 space-y-2">
+            <div>
+                <div class="text-sm font-semibold text-slate-500 uppercase mb-2">Inputs / Outputs</div>
+                <div class="space-y-1">
+                    <div class="toolbox-item" draggable="true" data-type="INPUT_SWITCH" data-tooltip="Click to toggle between 0 (OFF) and 1 (ON)">
+                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10a5 5 0 0 0 0-10H7a5 5 0 0 0 0 10Z"></path><circle cx="7" cy="15" r="3"></circle></svg>
+                        <span>Input Switch</span>
+                    </div>
+                    <div class="toolbox-item" draggable="true" data-type="OUTPUT_BULB" data-tooltip="Lights up (yellow) when input is 1">
+                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="17" y2="22"></line><path d="M12 1a9 9 0 0 0-6.12 15.66v0a4 4 0 0 0 8.24 0v0A9 9 0 0 0 12 1Z"></path><path d="M12 13a4 4 0 0 0 0-8Z"></path></svg>
+                        <span>Output Bulb</span>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <div class="text-sm font-semibold text-slate-500 uppercase mt-4 mb-2">Basic Gates</div>
+                <div class="space-y-1">
+                    <div class="toolbox-item" draggable="true" data-type="AND" data-tooltip="Outputs 1 only if BOTH inputs are 1">
+                        <svg class="w-6 h-6 text-slate-600" viewBox="0 0 60 40" fill="none" stroke="currentColor" stroke-width="3"><path d="M10 5 v30 h20 a15 15 0 0 0 0 -30 Z" fill="white"></path></svg>
+                        <span>AND</span>
+                    </div>
+                    <div class="toolbox-item" draggable="true" data-type="OR" data-tooltip="Outputs 1 if AT LEAST ONE input is 1">
+                        <svg class="w-6 h-6 text-slate-600" viewBox="0 0 60 40" fill="none" stroke="currentColor" stroke-width="3"><path d="M10 5 q 20 15 20 15 q 0 0 0 0 M10 35 q 20 -15 20 -15 M30 20 a 25 25 0 0 1 0 0 M10 5 a 30 30 0 0 0 0 30" fill="white"></path></svg>
+                        <span>OR</span>
+                    </div>
+                    <div class="toolbox-item" draggable="true" data-type="NOT" data-tooltip="Outputs the INVERSE of the input (1 -> 0, 0 -> 1)">
+                        <svg class="w-6 h-6 text-slate-600" viewBox="0 0 60 40" fill="none" stroke="currentColor" stroke-width="3"><path d="M10 5 v30 l30 -15 Z" fill="white"></path><circle cx="43" cy="20" r="3" fill="white"></circle></svg>
+                        <span>NOT (Inverter)</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div>
+                <div class="text-sm font-semibold text-slate-500 uppercase mt-4 mb-2">Derived Gates</div>
+                <div class="space-y-1">
+                    <div class="toolbox-item" draggable="true" data-type="NAND" data-tooltip="Outputs 0 only if BOTH inputs are 1 (NOT-AND)">
+                        <svg class="w-6 h-6 text-slate-600" viewBox="0 0 60 40" fill="none" stroke="currentColor" stroke-width="3"><path d="M10 5 v30 h20 a15 15 0 0 0 0 -30 Z" fill="white"></path><circle cx="48" cy="20" r="3" fill="white"></circle></svg>
+                        <span>NAND</span>
+                    </div>
+                    <div class="toolbox-item" draggable="true" data-type="NOR" data-tooltip="Outputs 1 only if BOTH inputs are 0 (NOT-OR)">
+                        <svg class="w-6 h-6 text-slate-600" viewBox="0 0 60 40" fill="none" stroke="currentColor" stroke-width="3"><path d="M10 5 q 20 15 20 15 q 0 0 0 0 M10 35 q 20 -15 20 -15 M30 20 a 25 25 0 0 1 0 0 M10 5 a 30 30 0 0 0 0 30" fill="white"></path><circle cx="51" cy="20" r="3" fill="white"></circle></svg>
+                        <span>NOR</span>
+                    </div>
+                    <div class="toolbox-item" draggable="true" data-type="XOR" data-tooltip="Outputs 1 only if inputs are DIFFERENT">
+                        <svg class="w-6 h-6 text-slate-600" viewBox="0 0 60 40" fill="none" stroke="currentColor" stroke-width="3"><path d="M15 5 q 20 15 20 15 q 0 0 0 0 M15 35 q 20 -15 20 -15 M35 20 a 25 25 0 0 1 0 0 M10 5 a 30 30 0 0 0 0 30 M5 5 a 30 30 0 0 0 0 30" fill="white"></path></svg>
+                        <span>XOR</span>
+                    </div>
+                    <div class="toolbox-item" draggable="true" data-type="XNOR" data-tooltip="Outputs 1 only if inputs are the SAME (NOT-XOR)">
+                        <svg class="w-6 h-6 text-slate-600" viewBox="0 0 60 40" fill="none" stroke="currentColor" stroke-width="3"><path d="M15 5 q 20 15 20 15 q 0 0 0 0 M15 35 q 20 -15 20 -15 M35 20 a 25 25 0 0 1 0 0 M10 5 a 30 30 0 0 0 0 30 M5 5 a 30 30 0 0 0 0 30" fill="white"></path><circle cx="56" cy="20" r="3" fill="white"></circle></svg>
+                        <span>XNOR</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div>
+                <div class="text-sm font-semibold text-slate-500 uppercase mt-4 mb-2">Other</div>
+                <div class="space-y-1">
+                    <div class="toolbox-item" draggable="true" data-type="LABEL" data-tooltip="Add a text label to your circuit">
+                        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7V5h16v2"></path><path d="M12 5v14"></path><path d="M8 19h8"></path></svg>
+                        <span>Label</span>
+                    </div>
+                </div>
+            </div>
+
+        </nav>
+    </aside>
+
+    <main class="flex-1 flex flex-col h-screen relative">
+        <nav class="flex items-center justify-between p-2 bg-white border-b border-slate-200 shadow-sm z-10 space-x-2">
+            <div class="flex items-center space-x-2">
+                <button id="btn-new" class="toolbar-btn" title="New Circuit (Ctrl+N)">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="12" x2="12" y1="18" y2="12"></line><line x1="9" x2="15" y1="15" y2="15"></line></svg>
+                    <span>New</span>
+                </button>
+                <button id="btn-save" class="toolbar-btn" title="Save Circuit (Ctrl+S)">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                    <span>Save</span>
+                </button>
+                <button id="btn-load" class="toolbar-btn" title="Load Circuit (Ctrl+O)">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" x2="12" y1="3" y2="15"></line></svg>
+                    <span>Load</span>
+                </button>
+            </div>
+            <div class="flex items-center space-x-2">
+                <button id="btn-undo" class="toolbar-btn" title="Undo (Ctrl+Z)">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 13v-2a4 4 0 0 0-4-4H8L12 3"></path><path d="M7 11l-4 4 4 4"></path></svg>
+                    <span>Undo</span>
+                </button>
+                <button id="btn-redo" class="toolbar-btn" title="Redo (Ctrl+Y)">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13v-2a4 4 0 0 1 4-4h11l-4-4"></path><path d="M17 11l4 4-4 4"></path></svg>
+                    <span>Redo</span>
+                </button>
+                <button id="btn-clear" class="toolbar-btn-danger" title="Clear Canvas (Delete)">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" x2="10" y1="11" y2="17"></line><line x1="14" x2="14" y1="11" y2="17"></line></svg>
+                    <span>Clear</span>
+                </button>
+            </div>
+            <div class="flex items-center space-x-3">
+                <div class="flex items-center">
+                    <input type="checkbox" id="toggle-boolean" class="h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300">
+                    <label for="toggle-boolean" class="ml-2 text-sm text-slate-700">Boolean Expression</label>
+                </div>
+                <div class="flex items-center">
+                    <input type="checkbox" id="toggle-truthtable" class="h-4 w-4 rounded text-blue-600 focus:ring-blue-500 border-gray-300">
+                    <label for="toggle-truthtable" class="ml-2 text-sm text-slate-700">Truth Table</label>
+                </div>
+            </div>
+        </nav>
+
+        <div id="canvas-container" class="flex-1 relative overflow-hidden">
+            <svg id="main-canvas" class="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <g id="gate-AND">
+                        <path d="M0 0 H30 A20 20 0 0 1 30 40 H0 Z" class="gate-body" />
+                    </g>
+                    <g id="gate-OR">
+                        <path d="M0 0 Q15 20 0 40 H10 A30 30 0 0 0 40 20 A30 30 0 0 0 10 0 Z" class="gate-body" />
+                    </g>
+                    <g id="gate-NOT">
+                        <path d="M0 0 L30 20 L0 40 Z" class="gate-body" />
+                        <circle cx="35" cy="20" r="5" class="gate-body" />
+                    </g>
+                    <g id="gate-XOR">
+                        <path d="M5 0 Q20 20 5 40 M0 0 Q15 20 0 40 H10 A30 30 0 0 0 40 20 A30 30 0 0 0 10 0 Z" class="gate-body" />
+                    </g>
+                    <g id="gate-NAND">
+                        <path d="M0 0 H30 A20 20 0 0 1 30 40 H0 Z" class="gate-body" />
+                        <circle cx="55" cy="20" r="5" class="gate-body" />
+                    </g>
+                    <g id="gate-NOR">
+                        <path d="M0 0 Q15 20 0 40 H10 A30 30 0 0 0 40 20 A30 30 0 0 0 10 0 Z" class="gate-body" />
+                        <circle cx="45" cy="20" r="5" class="gate-body" />
+                    </g>
+                    <g id="gate-XNOR">
+                        <path d="M5 0 Q20 20 5 40 M0 0 Q15 20 0 40 H10 A30 30 0 0 0 40 20 A30 30 0 0 0 10 0 Z" class="gate-body" />
+                        <circle cx="45" cy="20" r="5" class="gate-body" />
+                    </g>
+                </defs>
+                <g id="canvas-pan-zoom-group">
+                    <g id="wires-group"></g>
+                    <g id="components-group"></g>
+                </g>
+            </svg>
+            
+            <div class="absolute bottom-4 left-4 bg-white/80 p-3 rounded-lg shadow text-slate-600 text-sm border border-slate-200 pointer-events-none">
+                <ul class="list-disc list-inside space-y-1">
+                    <li><strong class="font-semibold">Drag & Drop</strong> from sidebar</li>
+                    <li><strong class="font-semibold">Click Nodes</strong> to connect wires</li>
+                    <li><strong class="font-semibold">Scroll</strong> to Zoom</li>
+                    <li><strong class="font-semibold">Middle-Click / Space + Drag</strong> to Pan</li>
+                    <li><strong class="font-semibold">Dbl-Click Component</strong> to label</li>
+                    <li><strong class="font-semibold">Select + Delete Key</strong> to remove</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div id="boolean-panel" class="absolute bottom-0 right-0 m-4 w-1/3 max-w-md bg-white p-4 rounded-lg shadow-xl border border-slate-200 z-10 hidden overflow-hidden resize-x">
+            <h3 class="text-lg font-bold text-slate-700 mb-2 border-b pb-2 flex justify-between items-center">
+                <span>Boolean Expressions</span>
+                <button id="boolean-close" class="text-slate-400 hover:text-slate-600">&times;</button>
+            </h3>
+            <div id="boolean-content" class="text-sm text-slate-800 font-mono space-y-2 max-h-40 overflow-y-auto">
+                No outputs found.
+            </div>
+        </div>
+        
+        <div id="truthtable-panel" class="absolute top-16 right-0 m-4 w-1/3 max-w-md bg-white p-4 rounded-lg shadow-xl border border-slate-200 z-10 hidden overflow-hidden resize-y">
+            <h3 class="text-lg font-bold text-slate-700 mb-2 border-b pb-2 flex justify-between items-center">
+                <span>Truth Table</span>
+                <button id="truthtable-close" class="text-slate-400 hover:text-slate-600">&times;</button>
+            </h3>
+            <div id="truthtable-content" class="text-sm max-h-80 overflow-auto">
+                No inputs or outputs found.
+            </div>
+        </div>
+        
+    </main>
+
+    <div id="modal-backdrop" class="fixed inset-0 bg-black/30 z-40 hidden"></div>
+    
+    <div id="save-modal" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white p-6 rounded-lg shadow-xl z-50 w-full max-w-md hidden">
+        <h3 class="text-lg font-bold text-slate-800 mb-4">Save Circuit</h3>
+        <label for="save-name" class="block text-sm font-medium text-slate-700">Circuit Name:</label>
+        <input type="text" id="save-name" class="mt-1 block w-full px-3 py-2 border border-slate-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
+        <div class="mt-6 flex justify-end space-x-3">
+            <button id="btn-save-cancel" class="modal-btn-secondary">Cancel</button>
+            <button id="btn-save-confirm" class="modal-btn-primary">Save</button>
+        </div>
+    </div>
+    
+    <div id="load-modal" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white p-6 rounded-lg shadow-xl z-50 w-full max-w-md hidden">
+        <h3 class="text-lg font-bold text-slate-800 mb-4">Load Circuit</h3>
+        <div id="load-list" class="max-h-60 overflow-y-auto border border-slate-200 rounded-md p-2 space-y-1">
+            <p class="text-slate-500">No saved circuits found.</p>
+        </div>
+        <div class="mt-6 flex justify-end space-x-3">
+            <button id="btn-load-cancel" class="modal-btn-secondary">Cancel</button>
+        </div>
+    </div>
+
+
+    <script>
+        // Apply Tailwind classes programmatically to shared components
+        document.querySelectorAll('.toolbox-item').forEach(el => {
+            el.classList.add('flex', 'items-center', 'space-x-3', 'p-2', 'rounded-md', 'text-slate-700', 'hover:bg-blue-100', 'hover:text-blue-600', 'cursor-pointer', 'transition-colors');
+        });
+        document.querySelectorAll('.toolbar-btn').forEach(el => {
+            el.className = 'flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-slate-600 bg-white hover:bg-slate-100 border border-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+        });
+        document.querySelectorAll('.toolbar-btn-danger').forEach(el => {
+            el.className = 'flex items-center space-x-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-red-600 bg-white hover:bg-red-50 border border-slate-200 hover:border-red-200 transition-colors';
+        });
+        document.querySelectorAll('.modal-btn-primary').forEach(el => {
+            el.className = 'px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500';
+        });
+        document.querySelectorAll('.modal-btn-secondary').forEach(el => {
+            el.className = 'px-4 py-2 bg-white text-slate-700 text-sm font-medium rounded-md border border-slate-300 shadow-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500';
+        });
+
+
+        // --- MAIN SIMULATOR SCRIPT ---
+        document.addEventListener('DOMContentLoaded', () => {
+
+            // --- 1. STATE AND CONSTANTS ---
+
+            // DOM Element References
+            const svg = document.getElementById('main-canvas');
+            const canvasContainer = document.getElementById('canvas-container');
+            const componentsGroup = document.getElementById('components-group');
+            const wiresGroup = document.getElementById('wires-group');
+            const panZoomGroup = document.getElementById('canvas-pan-zoom-group');
+            
+            // Modal Elements
+            const modalBackdrop = document.getElementById('modal-backdrop');
+            const saveModal = document.getElementById('save-modal');
+            const loadModal = document.getElementById('load-modal');
+            const saveNameInput = document.getElementById('save-name');
+            const loadList = document.getElementById('load-list');
+
+            // Panel Elements
+            const booleanPanel = document.getElementById('boolean-panel');
+            const booleanContent = document.getElementById('boolean-content');
+            const truthtablePanel = document.getElementById('truthtable-panel');
+            const truthtableContent = document.getElementById('truthtable-content');
+            
+            const SVG_NS = "http://www.w3.org/2000/svg";
+            let uniqueId = Date.now();
+            
+            // Core Data Structures
+            let components = [];
+            let wires = [];
+            let history = [];
+            let historyIndex = -1;
+
+            // UI State
+            let state = {
+                pan: { x: 0, y: 0 },
+                zoom: 1,
+                isPanning: false,
+                isDragging: null, // { type: 'component', id: componentId }
+                isWiring: null, // { fromComponentId, fromNodeId, fromNodeEl, x, y }
+                selectedComponentId: null,
+                showBoolean: false,
+                showTruthTable: false,
+            };
+
+            // Definitions for all components
+            const COMPONENT_DEFS = {
+                // Inputs/Outputs
+                INPUT_SWITCH: {
+                    width: 60, height: 40,
+                    inputs: [],
+                    outputs: [{ id: 'out', x: 60, y: 20 }],
+                    logic: (c) => c.value, // Logic just passes its own state
+                    render: (g, c) => {
+                        const body = document.createElementNS(SVG_NS, 'rect');
+                        body.setAttribute('class', 'switch-body');
+                        body.setAttribute('width', 60);
+                        body.setAttribute('height', 30);
+                        body.setAttribute('y', 5);
+                        g.appendChild(body);
+                        
+                        const toggle = document.createElementNS(SVG_NS, 'rect');
+                        toggle.setAttribute('class', `switch-toggle ${c.value === 1 ? 'switch-toggle-on' : ''}`);
+                        toggle.setAttribute('x', 5);
+                        toggle.setAttribute('y', 10);
+                        toggle.setAttribute('width', 20);
+                        toggle.setAttribute('height', 20);
+                        toggle.setAttribute('rx', 5);
+                        toggle.addEventListener('mousedown', (e) => {
+                            e.stopPropagation(); // Prevent canvas drag
+                            toggleInput(c.id);
+                        });
+                        g.appendChild(toggle);
+                    }
+                },
+                OUTPUT_BULB: {
+                    width: 40, height: 40,
+                    inputs: [{ id: 'in', x: 0, y: 20 }],
+                    outputs: [],
+                    render: (g, c) => {
+                        const value = c.inputs[0].value;
+                        const bulb = document.createElementNS(SVG_NS, 'circle');
+                        bulb.setAttribute('cx', 20);
+                        bulb.setAttribute('cy', 20);
+                        bulb.setAttribute('r', 15);
+                        bulb.setAttribute('class', value === 1 ? 'bulb-on' : 'bulb-off');
+                        bulb.setAttribute('stroke', '#9ca3af');
+                        bulb.setAttribute('stroke-width', 2);
+                        g.appendChild(bulb);
+                        
+                        const text = document.createElementNS(SVG_NS, 'text');
+                        text.setAttribute('x', 20);
+                        text.setAttribute('y', 25);
+                        text.setAttribute('text-anchor', 'middle');
+                        text.setAttribute('fill', value === 1 ? '#4b5563' : '#4b5563');
+                        text.setAttribute('font-size', '14px');
+                        text.setAttribute('font-weight', 'bold');
+                        text.textContent = value;
+                        g.appendChild(text);
+                    }
+                },
+                // Basic Gates
+                AND: {
+                    width: 50, height: 40,
+                    inputs: [{ id: 'in1', x: 0, y: 10 }, { id: 'in2', x: 0, y: 30 }],
+                    outputs: [{ id: 'out', x: 50, y: 20 }],
+                    logic: (in1, in2) => (in1 === 1 && in2 === 1) ? 1 : 0,
+                    render: (g) => {
+                        const shape = document.createElementNS(SVG_NS, 'use');
+                        shape.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '#gate-AND');
+                        shape.setAttribute('width', 50);
+                        shape.setAttribute('height', 40);
+                        g.appendChild(shape);
+                    }
+                },
+                OR: {
+                    width: 50, height: 40,
+                    inputs: [{ id: 'in1', x: 5, y: 10 }, { id: 'in2', x: 5, y: 30 }],
+                    outputs: [{ id: 'out', x: 50, y: 20 }],
+                    logic: (in1, in2) => (in1 === 1 || in2 === 1) ? 1 : 0,
+                    render: (g) => {
+                        const shape = document.createElementNS(SVG_NS, 'use');
+                        shape.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '#gate-OR');
+                        shape.setAttribute('width', 50);
+                        shape.setAttribute('height', 40);
+                        g.appendChild(shape);
+                    }
+                },
+                NOT: {
+                    width: 45, height: 40,
+                    inputs: [{ id: 'in', x: 0, y: 20 }],
+                    outputs: [{ id: 'out', x: 45, y: 20 }],
+                    logic: (inp) => (inp === 1) ? 0 : (inp === 0 ? 1 : null),
+                    render: (g) => {
+                        const shape = document.createElementNS(SVG_NS, 'use');
+                        shape.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '#gate-NOT');
+                        shape.setAttribute('width', 45);
+                        shape.setAttribute('height', 40);
+                        g.appendChild(shape);
+                    }
+                },
+                // Derived Gates
+                NAND: {
+                    width: 55, height: 40,
+                    inputs: [{ id: 'in1', x: 0, y: 10 }, { id: 'in2', x: 0, y: 30 }],
+                    outputs: [{ id: 'out', x: 55, y: 20 }],
+                    logic: (in1, in2) => (in1 === 1 && in2 === 1) ? 0 : 1,
+                    render: (g) => {
+                        const shape = document.createElementNS(SVG_NS, 'use');
+                        shape.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '#gate-NAND');
+                        shape.setAttribute('width', 55);
+                        shape.setAttribute('height', 40);
+                        g.appendChild(shape);
+                    }
+                },
+                NOR: {
+                    width: 55, height: 40,
+                    inputs: [{ id: 'in1', x: 5, y: 10 }, { id: 'in2', x: 5, y: 30 }],
+                    outputs: [{ id: 'out', x: 55, y: 20 }],
+                    logic: (in1, in2) => (in1 === 1 || in2 === 1) ? 0 : 1,
+                    render: (g) => {
+                        const shape = document.createElementNS(SVG_NS, 'use');
+                        shape.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '#gate-NOR');
+                        shape.setAttribute('width', 55);
+                        shape.setAttribute('height', 40);
+                        g.appendChild(shape);
+                    }
+                },
+                XOR: {
+                    width: 55, height: 40,
+                    inputs: [{ id: 'in1', x: 10, y: 10 }, { id: 'in2', x: 10, y: 30 }],
+                    outputs: [{ id: 'out', x: 55, y: 20 }],
+                    logic: (in1, in2) => (in1 !== in2) ? 1 : 0,
+                    render: (g) => {
+                        const shape = document.createElementNS(SVG_NS, 'use');
+                        shape.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '#gate-XOR');
+                        shape.setAttribute('width', 55);
+                        shape.setAttribute('height', 40);
+                        g.appendChild(shape);
+                    }
+                },
+                XNOR: {
+                    width: 60, height: 40,
+                    inputs: [{ id: 'in1', x: 10, y: 10 }, { id: 'in2', x: 10, y: 30 }],
+                    outputs: [{ id: 'out', x: 60, y: 20 }],
+                    logic: (in1, in2) => (in1 === in2) ? 1 : 0,
+                    render: (g) => {
+                        const shape = document.createElementNS(SVG_NS, 'use');
+                        shape.setAttributeNS('http://www.w3.org/1999/xlink', 'href', '#gate-XNOR');
+                        shape.setAttribute('width', 60);
+                        shape.setAttribute('height', 40);
+                        g.appendChild(shape);
+                    }
+                },
+                // Other
+                LABEL: {
+                    width: 100, height: 20,
+                    inputs: [], outputs: [],
+                    render: (g, c) => {
+                        const text = document.createElementNS(SVG_NS, 'text');
+                        text.setAttribute('x', 0);
+                        text.setAttribute('y', 15);
+                        text.setAttribute('fill', '#1e293b'); // slate-800
+                        text.setAttribute('font-size', '16px');
+                        text.setAttribute('font-weight', '600');
+                        text.setAttribute('class', 'gate-label');
+                        text.textContent = c.label || 'Label';
+                        g.appendChild(text);
+                    }
+                }
+            };
+
+
+            // --- 2. CORE FUNCTIONS (Create, Delete, Update) ---
+
+            function getNextId() {
+                return `id-${uniqueId++}`;
+            }
+
+            function getSVGCoords(e) {
+                const rect = svg.getBoundingClientRect();
+                const x = (e.clientX - rect.left - state.pan.x) / state.zoom;
+                const y = (e.clientY - rect.top - state.pan.y) / state.zoom;
+                return { x, y };
+            }
+
+            function createComponent(type, x, y) {
+                const def = COMPONENT_DEFS[type];
+                if (!def) return;
+
+                const newComponent = {
+                    id: getNextId(),
+                    type: type,
+                    x: x - def.width / 2,
+                    y: y - def.height / 2,
+                    width: def.width,
+                    height: def.height,
+                    label: type,
+                    inputs: def.inputs.map(n => ({ 
+                        id: `${getNextId()}-in-${n.id}`, 
+                        x: n.x, 
+                        y: n.y, 
+                        value: null, 
+                        sourceComponentId: null, 
+                        sourceNodeId: null 
+                    })),
+                    outputs: def.outputs.map(n => ({ 
+                        id: `${getNextId()}-out-${n.id}`, 
+                        x: n.x, 
+                        y: n.y, 
+                        value: type === 'INPUT_SWITCH' ? 0 : null 
+                    })),
+                };
+                
+                if (type === 'INPUT_SWITCH') {
+                    newComponent.value = 0; // Initial state for switches
+                    newComponent.label = `Input ${components.filter(c => c.type === 'INPUT_SWITCH').length + 1}`;
+                }
+                if (type === 'OUTPUT_BULB') {
+                    newComponent.label = `Output ${components.filter(c => c.type === 'OUTPUT_BULB').length + 1}`;
+                }
+                if (type === 'LABEL') {
+                    newComponent.label = 'My Label';
+                }
+
+                components.push(newComponent);
+                saveHistory();
+                render();
+            }
+            
+            function createWire(fromComponentId, fromNodeId, toComponentId, toNodeId) {
+                // Check if target input is already connected
+                const toComponent = findComponent(toComponentId);
+                const toNode = findNode(toComponentId, toNodeId);
+                if (toNode.sourceComponentId) {
+                    // Remove existing wire to this input
+                    deleteWireByTarget(toComponentId, toNodeId);
+                }
+                
+                // Check for circular connections
+                if (isCircularConnection(fromComponentId, toComponentId)) {
+                    alert("Circular connection detected! This is not allowed.");
+                    return;
+                }
+
+                const newWire = {
+                    id: getNextId(),
+                    fromComponentId,
+                    fromNodeId,
+                    toComponentId,
+                    toNodeId
+                };
+                
+                wires.push(newWire);
+                
+                // Update the target node's source
+                toNode.sourceComponentId = fromComponentId;
+                toNode.sourceNodeId = fromNodeId;
+
+                propagateLogic(); // This will also call render()
+                saveHistory();
+            }
+            
+            function deleteComponent(id) {
+                components = components.filter(c => c.id !== id);
+                // Remove all wires connected to this component
+                wires = wires.filter(w => w.fromComponentId !== id && w.toComponentId !== id);
+                
+                // Update nodes that were connected to this component
+                components.forEach(c => {
+                    c.inputs.forEach(n => {
+                        if (n.sourceComponentId === id) {
+                            n.sourceComponentId = null;
+                            n.sourceNodeId = null;
+                            n.value = null;
+                        }
+                    });
+                });
+                
+                state.selectedComponentId = null;
+                propagateLogic();
+                saveHistory();
+            }
+            
+            function deleteWireByTarget(toComponentId, toNodeId) {
+                wires = wires.filter(w => !(w.toComponentId === toComponentId && w.toNodeId === toNodeId));
+                const node = findNode(toComponentId, toNodeId);
+                if (node) {
+                    node.sourceComponentId = null;
+                    node.sourceNodeId = null;
+                    node.value = null;
+                }
+                // Don't save history here, let the calling function do it
+            }
+            
+            function toggleInput(id) {
+                const component = findComponent(id);
+                if (component && component.type === 'INPUT_SWITCH') {
+                    component.value = component.value === 0 ? 1 : 0;
+                    component.outputs[0].value = component.value;
+                    propagateLogic();
+                    saveHistory();
+                }
+            }
+            
+            function editComponentLabel(id) {
+                const component = findComponent(id);
+                if (!component) return;
+                
+                const newLabel = prompt(`Enter new label for ${component.label}:`, component.label);
+                if (newLabel !== null) {
+                    component.label = newLabel;
+                    saveHistory();
+                    render(); // Just re-render, no logic change
+                }
+            }
+
+
+            // --- 3. RENDER FUNCTION (View) ---
+
+            function render() {
+                // Clear groups
+                while (componentsGroup.firstChild) {
+                    componentsGroup.removeChild(componentsGroup.firstChild);
+                }
+                while (wiresGroup.firstChild) {
+                    wiresGroup.removeChild(wiresGroup.firstChild);
+                }
+                
+                // Update Pan/Zoom
+                panZoomGroup.setAttribute('transform', `translate(${state.pan.x}, ${state.pan.y}) scale(${state.zoom})`);
+
+                // Draw Wires
+                wires.forEach(wire => {
+                    const fromNodePos = getAbsoluteNodePos(wire.fromComponentId, wire.fromNodeId);
+                    const toNodePos = getAbsoluteNodePos(wire.toComponentId, wire.toNodeId);
+                    
+                    if (!fromNodePos || !toNodePos) return; // Component was deleted
+                    
+                    const fromNode = findNode(wire.fromComponentId, wire.fromNodeId);
+                    const wireValue = fromNode ? fromNode.value : null;
+
+                    const path = document.createElementNS(SVG_NS, 'path');
+                    const d = `M ${fromNodePos.x} ${fromNodePos.y} C ${fromNodePos.x + 50} ${fromNodePos.y} ${toNodePos.x - 50} ${toNodePos.y} ${toNodePos.x} ${toNodePos.y}`;
+                    path.setAttribute('d', d);
+                    path.setAttribute('class', `wire ${wireValue === 1 ? 'wire-logic-1' : ''}`);
+                    path.setAttribute('data-wire-id', wire.id);
+                    
+                    // Add click to delete wire
+                    path.addEventListener('mousedown', (e) => {
+                         if (e.button === 0) { // Left click
+                            e.stopPropagation();
+                            // Simple delete on click
+                            deleteWireByTarget(wire.toComponentId, wire.toNodeId);
+                            propagateLogic();
+                            saveHistory();
+                        }
+                    });
+                    
+                    wiresGroup.appendChild(path);
+                });
+                
+                // Draw temporary wiring line
+                if (state.isWiring) {
+                    const path = document.createElementNS(SVG_NS, 'path');
+                    const fromPos = getAbsoluteNodePos(state.isWiring.fromComponentId, state.isWiring.fromNodeId);
+                    const toPos = state.isWiring.mousePos;
+                    const d = `M ${fromPos.x} ${fromPos.y} C ${fromPos.x + 50} ${fromPos.y} ${toPos.x - 50} ${toPos.y} ${toPos.x} ${toPos.y}`;
+                    path.setAttribute('d', d);
+                    path.setAttribute('class', 'wire-temp');
+                    wiresGroup.appendChild(path);
+                }
+
+                // Draw Components
+                components.forEach(c => {
+                    const def = COMPONENT_DEFS[c.type];
+                    const g = document.createElementNS(SVG_NS, 'g');
+                    g.setAttribute('transform', `translate(${c.x}, ${c.y})`);
+                    g.setAttribute('data-component-id', c.id);
+                    g.setAttribute('class', 'component-group');
+                    
+                    if (c.id === state.selectedComponentId) {
+                        const selectionBox = document.createElementNS(SVG_NS, 'rect');
+                        selectionBox.setAttribute('x', -5);
+                        selectionBox.setAttribute('y', -5);
+                        selectionBox.setAttribute('width', c.width + 10);
+                        selectionBox.setAttribute('height', c.height + 10);
+                        selectionBox.setAttribute('fill', 'none');
+                        selectionBox.setAttribute('stroke', '#3b82f6'); // blue-500
+                        selectionBox.setAttribute('stroke-width', 2);
+                        selectionBox.setAttribute('stroke-dasharray', '4 4');
+                        g.appendChild(selectionBox);
+                    }
+
+                    // Render component's custom shape
+                    def.render(g, c);
+                    
+                    // Draw Label
+                    if (c.type !== 'LABEL') {
+                        const label = document.createElementNS(SVG_NS, 'text');
+                        label.setAttribute('x', c.width / 2);
+                        label.setAttribute('y', c.height + 15);
+                        label.setAttribute('text-anchor', 'middle');
+                        label.setAttribute('fill', '#475569'); // slate-600
+                        label.setAttribute('font-size', '12px');
+                        label.setAttribute('class', 'gate-label');
+                        label.textContent = c.label;
+                        g.appendChild(label);
+                    }
+
+                    // Draw Nodes
+                    c.inputs.forEach(n => {
+                        const nodeEl = document.createElementNS(SVG_NS, 'circle');
+                        nodeEl.setAttribute('cx', n.x);
+                        nodeEl.setAttribute('cy', n.y);
+                        nodeEl.setAttribute('r', 6);
+                        nodeEl.setAttribute('class', 'node node-input');
+                        nodeEl.setAttribute('data-component-id', c.id);
+                        nodeEl.setAttribute('data-node-id', n.id);
+                        g.appendChild(nodeEl);
+                    });
+
+                    c.outputs.forEach(n => {
+                        const nodeEl = document.createElementNS(SVG_NS, 'circle');
+                        nodeEl.setAttribute('cx', n.x);
+                        nodeEl.setAttribute('cy', n.y);
+                        nodeEl.setAttribute('r', 6);
+                        nodeEl.setAttribute('class', 'node node-output');
+                        nodeEl.setAttribute('data-component-id', c.id);
+                        nodeEl.setAttribute('data-node-id', n.id);
+                        g.appendChild(nodeEl);
+                    });
+
+                    // Add event listeners to the group
+                    g.addEventListener('mousedown', (e) => onComponentMouseDown(e, c.id));
+                    g.addEventListener('dblclick', (e) => {
+                        e.stopPropagation();
+                        editComponentLabel(c.id);
+                    });
+
+                    componentsGroup.appendChild(g);
+                });
+                
+                // Update educational panels
+                if (state.showBoolean) updateBooleanPanel();
+                if (state.showTruthTable) updateTruthTablePanel();
+            }
+
+
+            // --- 4. LOGIC SIMULATION ---
+            
+            function propagateLogic() {
+                // Get all input components
+                const inputs = components.filter(c => c.type === 'INPUT_SWITCH');
+                
+                // Create a map for quick component lookup
+                const componentMap = new Map(components.map(c => [c.id, c]));
+                
+                // Create an in-degree map to manage processing order (for topological sort)
+                const inDegree = new Map();
+                const nodeToComponent = new Map(); // Map input node ID -> component
+                
+                // Reset all non-input values and calculate in-degrees
+                components.forEach(c => {
+                    if (c.type !== 'INPUT_SWITCH') {
+                        let connectedInputs = 0;
+                        c.inputs.forEach(inNode => {
+                            if (inNode.sourceComponentId) {
+                                connectedInputs++;
+                            }
+                            nodeToComponent.set(inNode.id, c);
+                        });
+                        inDegree.set(c.id, connectedInputs);
+                    }
+                    // Reset output values (except for switches)
+                    if (c.type !== 'INPUT_SWITCH') {
+                        c.outputs.forEach(outNode => outNode.value = null);
+                    }
+                });
+
+                // Build adjacency list (output node -> list of input nodes)
+                const adj = new Map(); // Map<fromNodeId, toNodeId[]>
+                wires.forEach(w => {
+                    if (!adj.has(w.fromNodeId)) adj.set(w.fromNodeId, []);
+                    adj.get(w.fromNodeId).push(w.toNodeId);
+                });
+
+                // Initialize queue with all input switches
+                const queue = [...inputs];
+
+                let iteration = 0;
+                const maxIterations = components.length * components.length; // Safety break for loops
+
+                while (queue.length > 0 && iteration < maxIterations) {
+                    iteration++;
+                    const c = queue.shift();
+                    
+                    // Calculate logic for this component (if it's not just an input)
+                    if (c.type !== 'INPUT_SWITCH') {
+                        const def = COMPONENT_DEFS[c.type];
+                        if (def.logic) {
+                            const inputValues = c.inputs.map(inNode => inNode.value);
+                            
+                            // Only calculate if all inputs are non-null
+                            if (inputValues.every(v => v !== null)) {
+                                const result = def.logic(...inputValues);
+                                c.outputs.forEach(outNode => outNode.value = result);
+                            } else {
+                                c.outputs.forEach(outNode => outNode.value = null); // Propagate null
+                            }
+                        }
+                    }
+                    
+                    // For each output of this component...
+                    c.outputs.forEach(outNode => {
+                        // ...find all connected input nodes
+                        const targetInputNodes = adj.get(outNode.id) || [];
+                        targetInputNodes.forEach(inNodeId => {
+                            // Find the component this input node_belongs to
+                            const targetComponent = nodeToComponent.get(inNodeId);
+                            if (targetComponent) {
+                                // Find the specific input node and set its value
+                                const inputNode = targetComponent.inputs.find(n => n.id === inNodeId);
+                                if (inputNode) {
+                                    inputNode.value = outNode.value;
+                                }
+                                
+                                // Decrement in-degree for the target component
+                                const currentInDegree = inDegree.get(targetComponent.id) - 1;
+                                inDegree.set(targetComponent.id, currentInDegree);
+                                
+                                // If all inputs are processed, add to queue
+                                if (currentInDegree === 0) {
+                                    queue.push(targetComponent);
+                                }
+                            }
+                        });
+                    });
+                }
+                
+                if (iteration >= maxIterations) {
+                    console.warn("Simulation limit reached. A logic loop is likely present.");
+                    // In a loop, set all remaining component outputs to 'error' or null
+                    inDegree.forEach((degree, cId) => {
+                        if (degree > 0) {
+                            const c = componentMap.get(cId);
+                            if (c) c.outputs.forEach(n => n.value = null);
+                        }
+                    });
+                }
+
+                // Final re-render to show new logic states
+                render();
+            }
+            
+            function isCircularConnection(fromComponentId, toComponentId) {
+                // Perform a BFS/DFS from `toComponentId` to see if we can reach `fromComponentId`
+                const queue = [toComponentId];
+                const visited = new Set([toComponentId]);
+                
+                while (queue.length > 0) {
+                    const currentId = queue.shift();
+                    if (currentId === fromComponentId) {
+                        return true; // Found a path back
+                    }
+                    
+                    const component = findComponent(currentId);
+                    if (!component) continue;
+                    
+                    component.outputs.forEach(outNode => {
+                        wires.forEach(w => {
+                            if (w.fromNodeId === outNode.id) {
+                                const nextComponentId = w.toComponentId;
+                                if (!visited.has(nextComponentId)) {
+                                    visited.add(nextComponentId);
+                                    queue.push(nextComponentId);
+                                }
+                            }
+                        });
+                    });
+                }
+                return false;
+            }
+
+
+            // --- 5. EVENT HANDLERS ---
+
+            // Toolbox Drag/Drop
+            let draggedType = null;
+            
+            document.querySelectorAll('.toolbox-item').forEach(item => {
+                item.addEventListener('dragstart', (e) => {
+                    draggedType = e.currentTarget.dataset.type;
+                    if (e.dataTransfer) {
+                        e.dataTransfer.effectAllowed = 'copy';
+                        e.dataTransfer.setData('text/html', '<div>Dragging</div>');
+                    }
+                });
+                
+                item.addEventListener('dragend', () => {
+                    draggedType = null;
+                });
+            });
+
+            canvasContainer.addEventListener('dragenter', (e) => {
+                e.preventDefault();
+                if (e.dataTransfer) {
+                    e.dataTransfer.dropEffect = 'copy';
+                }
+            });
+
+            canvasContainer.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                if (e.dataTransfer) {
+                    e.dataTransfer.dropEffect = 'copy';
+                }
+            });
+
+            canvasContainer.addEventListener('drop', (e) => {
+                e.preventDefault();
+                if (draggedType && COMPONENT_DEFS[draggedType]) {
+                    const { x, y } = getSVGCoords(e);
+                    createComponent(draggedType, x, y);
+                    draggedType = null;
+                }
+            });
+
+            // Canvas Pan, Zoom, Wiring, Dragging
+            canvasContainer.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const zoomFactor = 1.1;
+                const oldZoom = state.zoom;
+                const newZoom = e.deltaY < 0 ? oldZoom * zoomFactor : oldZoom / zoomFactor;
+                state.zoom = Math.max(0.2, Math.min(newZoom, 5)); // Clamp zoom
+                
+                const { x: mouseX, y: mouseY } = getSVGCoords(e);
+                
+                // Pan to keep mouse position stable during zoom
+                state.pan.x = state.pan.x - (mouseX * (state.zoom - oldZoom));
+                state.pan.y = state.pan.y - (mouseY * (state.zoom - oldZoom));
+
+                render();
+            });
+            
+            canvasContainer.addEventListener('mousedown', (e) => {
+                // Middle mouse or spacebar for panning
+                if (e.button === 1 || (e.button === 0 && e.spaceKey)) {
+                    e.preventDefault();
+                    state.isPanning = true;
+                    state.pan.lastX = e.clientX;
+                    state.pan.lastY = e.clientY;
+                    canvasContainer.style.cursor = 'grabbing';
+                }
+                
+                // Left click on empty canvas deselects
+                if (e.button === 0 && e.target === svg) {
+                    state.selectedComponentId = null;
+                    render();
+                }
+            });
+            
+            canvasContainer.addEventListener('mousemove', (e) => {
+                if (state.isPanning) {
+                    const dx = e.clientX - state.pan.lastX;
+                    const dy = e.clientY - state.pan.lastY;
+                    state.pan.x += dx;
+                    state.pan.y += dy;
+                    state.pan.lastX = e.clientX;
+                    state.pan.lastY = e.clientY;
+                    render();
+                }
+                
+                if (state.isDragging) {
+                    const { x, y } = getSVGCoords(e);
+                    const component = findComponent(state.isDragging.id);
+                    component.x = x - state.isDragging.offsetX;
+                    component.y = y - state.isDragging.offsetY;
+                    render();
+                }
+                
+                if (state.isWiring) {
+                    state.isWiring.mousePos = getSVGCoords(e);
+                    render();
+                }
+            });
+            
+            canvasContainer.addEventListener('mouseup', (e) => {
+                if (state.isPanning) {
+                    state.isPanning = false;
+                    canvasContainer.style.cursor = 'grab';
+                }
+                
+                if (state.isDragging) {
+                    state.isDragging = null;
+                    saveHistory(); // Save state after drag
+                }
+                
+                if (state.isWiring) {
+                    const targetEl = e.target.closest('.node-input');
+                    if (targetEl) {
+                        const toComponentId = targetEl.dataset.componentId;
+                        const toNodeId = targetEl.dataset.nodeId;
+                        
+                        // Don't connect to self
+                        if (toComponentId !== state.isWiring.fromComponentId) {
+                            createWire(
+                                state.isWiring.fromComponentId,
+                                state.isWiring.fromNodeId,
+                                toComponentId,
+                                toNodeId
+                            );
+                        }
+                    }
+                    state.isWiring = null;
+                    render(); // Clean up temp wire
+                }
+            });
+            
+            canvasContainer.addEventListener('mouseleave', () => {
+                // Cancel wiring/dragging if mouse leaves canvas
+                if (state.isDragging) {
+                    state.isDragging = null;
+                    saveHistory();
+                }
+                if (state.isWiring) {
+                    state.isWiring = null;
+                    render();
+                }
+                if (state.isPanning) {
+                    state.isPanning = false;
+                    canvasContainer.style.cursor = 'grab';
+                }
+            });
+
+            // Component-specific handlers
+            function onComponentMouseDown(e, id) {
+                e.stopPropagation();
+                const targetNode = e.target.closest('.node');
+                const component = findComponent(id);
+                
+                if (targetNode) {
+                    // Start Wiring
+                    const fromNodeId = targetNode.dataset.nodeId;
+                    const isOutputNode = targetNode.classList.contains('node-output');
+                    
+                    if (isOutputNode) {
+                        state.isWiring = {
+                            fromComponentId: id,
+                            fromNodeId: fromNodeId,
+                            mousePos: getSVGCoords(e)
+                        };
+                    } else {
+                        // Start wiring from an input (to disconnect)
+                        const inputNode = component.inputs.find(n => n.id === fromNodeId);
+                        if (inputNode && inputNode.sourceComponentId) {
+                            const oldFromComponentId = inputNode.sourceComponentId;
+                            const oldFromNodeId = inputNode.sourceNodeId;
+                            
+                            // Delete old wire
+                            deleteWireByTarget(id, fromNodeId);
+                            
+                            // Start new wire from original source
+                            state.isWiring = {
+                                fromComponentId: oldFromComponentId,
+                                fromNodeId: oldFromNodeId,
+                                mousePos: getSVGCoords(e)
+                            };
+                            
+                            propagateLogic(); // Render is called inside
+                        }
+                    }
+                    
+                } else if (e.button === 0) {
+                    // Start Dragging Component
+                    state.selectedComponentId = id;
+                    const { x, y } = getSVGCoords(e);
+                    state.isDragging = {
+                        id: id,
+                        offsetX: x - component.x,
+                        offsetY: y - component.y
+                    };
+                    render();
+                }
+            }
+            
+            // Keyboard Shortcuts
+            window.addEventListener('keydown', (e) => {
+                // Delete component
+                if ((e.key === 'Delete' || e.key === 'Backspace') && state.selectedComponentId) {
+                    // check if not typing in an input
+                    if (document.activeElement.tagName === 'INPUT') return;
+                    e.preventDefault();
+                    deleteComponent(state.selectedComponentId);
+                }
+                
+                // Undo/Redo
+                if (e.ctrlKey && e.key === 'z') {
+                    e.preventDefault();
+                    undo();
+                }
+                if (e.ctrlKey && e.key === 'y') {
+                    e.preventDefault();
+                    redo();
+                }
+                
+                // Save/Load/New
+                if (e.ctrlKey && e.key === 's') {
+                    e.preventDefault();
+                    openSaveModal();
+                }
+                if (e.ctrlKey && e.key === 'o') {
+                    e.preventDefault();
+                    openLoadModal();
+                }
+                if (e.ctrlKey && e.key === 'n') {
+                    e.preventDefault();
+                    newCircuit();
+                }
+                
+                // Panning with spacebar
+                if (e.key === ' ' && !state.isPanning) {
+                    e.preventDefault();
+                    canvasContainer.style.cursor = 'grab';
+                    e.spaceKey = true; // Add flag to event for mousedown handler
+                }
+            });
+            
+            window.addEventListener('keyup', (e) => {
+                if (e.key === ' ' && !state.isPanning) {
+                    canvasContainer.style.cursor = 'default';
+                }
+            });
+            
+            // Toolbar Buttons
+            document.getElementById('btn-new').addEventListener('click', newCircuit);
+            document.getElementById('btn-clear').addEventListener('click', clearCircuit);
+            document.getElementById('btn-undo').addEventListener('click', undo);
+            document.getElementById('btn-redo').addEventListener('click', redo);
+            document.getElementById('btn-save').addEventListener('click', openSaveModal);
+            document.getElementById('btn-load').addEventListener('click', openLoadModal);
+            
+            // Panel Toggles
+            const boolToggle = document.getElementById('toggle-boolean');
+            const ttToggle = document.getElementById('toggle-truthtable');
+            
+            boolToggle.addEventListener('change', () => {
+                state.showBoolean = boolToggle.checked;
+                booleanPanel.classList.toggle('hidden', !state.showBoolean);
+                if (state.showBoolean) updateBooleanPanel();
+            });
+            ttToggle.addEventListener('change', () => {
+                state.showTruthTable = ttToggle.checked;
+                truthtablePanel.classList.toggle('hidden', !state.showTruthTable);
+                if (state.showTruthTable) updateTruthTablePanel();
+            });
+            
+            document.getElementById('boolean-close').addEventListener('click', () => {
+                boolToggle.checked = false;
+                state.showBoolean = false;
+                booleanPanel.classList.add('hidden');
+            });
+            document.getElementById('truthtable-close').addEventListener('click', () => {
+                ttToggle.checked = false;
+                state.showTruthTable = false;
+                truthtablePanel.classList.add('hidden');
+            });
+
+
+            // --- 6. HISTORY (Undo/Redo) ---
+            
+            function saveHistory() {
+                // Clear redo stack
+                history = history.slice(0, historyIndex + 1);
+                
+                // Push a deep copy of the current state
+                const stateCopy = {
+                    components: JSON.parse(JSON.stringify(components)),
+                    wires: JSON.parse(JSON.stringify(wires))
+                };
+                history.push(stateCopy);
+                historyIndex++;
+                
+                // Limit history size
+                if (history.length > 50) {
+                    history.shift();
+                    historyIndex--;
+                }
+                
+                updateUndoRedoButtons();
+            }
+
+            function loadState(state) {
+                // Load from a history entry (needs deep copy)
+                components = JSON.parse(JSON.stringify(state.components));
+                wires = JSON.parse(JSON.stringify(state.wires));
+                propagateLogic();
+            }
+
+            function undo() {
+                if (historyIndex > 0) {
+                    historyIndex--;
+                    loadState(history[historyIndex]);
+                }
+                updateUndoRedoButtons();
+            }
+            
+            function redo() {
+                if (historyIndex < history.length - 1) {
+                    historyIndex++;
+                    loadState(history[historyIndex]);
+                }
+                updateUndoRedoButtons();
+            }
+            
+            function updateUndoRedoButtons() {
+                document.getElementById('btn-undo').disabled = (historyIndex <= 0);
+                document.getElementById('btn-redo').disabled = (historyIndex >= history.length - 1);
+            }
+            
+            
+            // --- 7. CIRCUIT MANAGEMENT (New, Clear, Save, Load) ---
+            
+            function newCircuit() {
+                if (confirm('Are you sure you want to start a new circuit? Any unsaved changes will be lost.')) {
+                    clearCircuit();
+                }
+            }
+            
+            function clearCircuit() {
+                components = [];
+                wires = [];
+                state.selectedComponentId = null;
+                history = [];
+                historyIndex = -1;
+                saveHistory();
+                propagateLogic(); // This will call render
+            }
+
+            // Modal Controls
+            function openModal(modal) {
+                modalBackdrop.classList.remove('hidden');
+                modal.classList.remove('hidden');
+            }
+            function closeModal(modal) {
+                modalBackdrop.classList.add('hidden');
+                modal.classList.add('hidden');
+            }
+            
+            document.getElementById('btn-save-cancel').addEventListener('click', () => closeModal(saveModal));
+            document.getElementById('btn-load-cancel').addEventListener('click', () => closeModal(loadModal));
+            modalBackdrop.addEventListener('click', () => {
+                closeModal(saveModal);
+                closeModal(loadModal);
+            });
+
+            // Save Logic
+            function openSaveModal() {
+                openModal(saveModal);
+                saveNameInput.focus();
+            }
+            
+            document.getElementById('btn-save-confirm').addEventListener('click', () => {
+                const name = saveNameInput.value.trim();
+                if (name) {
+                    try {
+                        const circuitData = {
+                            components: components,
+                            wires: wires,
+                            timestamp: new Date().toISOString()
+                        };
+                        localStorage.setItem(`logicSim_${name}`, JSON.stringify(circuitData));
+                        alert(`Circuit "${name}" saved!`);
+                        saveNameInput.value = '';
+                        closeModal(saveModal);
+                    } catch (e) {
+                        alert('Error saving circuit. Storage might be full.');
+                        console.error(e);
+                    }
+                } else {
+                    alert('Please enter a valid name.');
+                }
+            });
+
+            // Load Logic
+            function openLoadModal() {
+                populateLoadList();
+                openModal(loadModal);
+            }
+            
+            function populateLoadList() {
+                loadList.innerHTML = '';
+                let circuitsFound = false;
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key.startsWith('logicSim_')) {
+                        circuitsFound = true;
+                        const name = key.substring(9);
+                        
+                        const item = document.createElement('div');
+                        item.className = 'flex justify-between items-center p-2 rounded hover:bg-slate-100';
+                        
+                        const nameEl = document.createElement('span');
+                        nameEl.textContent = name;
+                        nameEl.className = 'font-medium text-slate-700';
+                        
+                        const btnGroup = document.createElement('div');
+                        btnGroup.className = 'space-x-2';
+                        
+                        const loadBtn = document.createElement('button');
+                        loadBtn.textContent = 'Load';
+                        loadBtn.className = 'text-sm text-blue-600 hover:text-blue-800 font-medium';
+                        loadBtn.onclick = () => loadCircuit(name);
+                        
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.textContent = 'Delete';
+                        deleteBtn.className = 'text-sm text-red-600 hover:text-red-800 font-medium';
+                        deleteBtn.onclick = () => deleteCircuit(name);
+                        
+                        btnGroup.appendChild(loadBtn);
+                        btnGroup.appendChild(deleteBtn);
+                        item.appendChild(nameEl);
+                        item.appendChild(btnGroup);
+                        loadList.appendChild(item);
+                    }
+                }
+                
+                if (!circuitsFound) {
+                    loadList.innerHTML = '<p class="text-slate-500">No saved circuits found.</p>';
+                }
+            }
+            
+            function loadCircuit(name) {
+                if (!confirm(`Load circuit "${name}"? Any unsaved changes will be lost.`)) {
+                    return;
+                }
+                
+                const data = localStorage.getItem(`logicSim_${name}`);
+                if (data) {
+                    try {
+                        const circuitData = JSON.parse(data);
+                        components = circuitData.components;
+                        wires = circuitData.wires;
+                        
+                        // Clear history and save new state
+                        history = [];
+                        historyIndex = -1;
+                        saveHistory(); 
+                        
+                        propagateLogic();
+                        closeModal(loadModal);
+                    } catch (e) {
+                        alert('Error loading circuit. Data may be corrupt.');
+                        console.error(e);
+                    }
+                }
+            }
+            
+            function deleteCircuit(name) {
+                if (confirm(`Are you sure you want to delete "${name}"?`)) {
+                    localStorage.removeItem(`logicSim_${name}`);
+                    populateLoadList(); // Refresh the list
+                }
+            }
+            
+
+            // --- 8. EDUCATIONAL PANELS ---
+            
+            function updateBooleanPanel() {
+                const outputs = components.filter(c => c.type === 'OUTPUT_BULB');
+                if (outputs.length === 0) {
+                    booleanContent.innerHTML = 'Add an Output Bulb to see its expression.';
+                    return;
+                }
+                
+                const wireMap = new Map(); // toNodeId -> fromNodeId
+                wires.forEach(w => wireMap.set(w.toNodeId, w.fromNodeId));
+                
+                const componentMap = new Map(); // fromNodeId -> component
+                components.forEach(c => {
+                    c.outputs.forEach(outNode => componentMap.set(outNode.id, c));
+                });
+                
+                const expressionCache = new Map();
+                
+                function getExpression(inputNodeId) {
+                    if (expressionCache.has(inputNodeId)) {
+                        return expressionCache.get(inputNodeId);
+                    }
+                    
+                    const fromNodeId = wireMap.get(inputNodeId);
+                    if (!fromNodeId) return '?'; // Unconnected
+                    
+                    const sourceComponent = componentMap.get(fromNodeId);
+                    if (!sourceComponent) return '?';
+                    
+                    if (sourceComponent.type === 'INPUT_SWITCH') {
+                        const label = sourceComponent.label.replace(/\s+/g, '_') || 'IN';
+                        expressionCache.set(inputNodeId, label);
+                        return label;
+                    }
+                    
+                    const def = COMPONENT_DEFS[sourceComponent.type];
+                    const opMap = {
+                        AND: 'AND', NAND: 'NAND',
+                        OR: 'OR', NOR: 'NOR',
+                        XOR: 'XOR', XNOR: 'XNOR',
+                        NOT: 'NOT'
+                    };
+                    const op = opMap[sourceComponent.type];
+                    
+                    if (!op) return '?';
+                    
+                    const inputExprs = sourceComponent.inputs.map(n => getExpression(n.id));
+                    
+                    let result = '';
+                    if (op === 'NOT') {
+                        result = `NOT(${inputExprs[0]})`;
+                    } else {
+                        result = `(${inputExprs[0]} ${op} ${inputExprs[1]})`;
+                    }
+                    
+                    expressionCache.set(inputNodeId, result);
+                    return result;
+                }
+                
+                booleanContent.innerHTML = '';
+                outputs.forEach(out => {
+                    const outputLabel = out.label.replace(/\s+/g, '_') || 'OUT';
+                    const expr = getExpression(out.inputs[0].id);
+                    
+                    const el = document.createElement('div');
+                    el.innerHTML = `<strong class="text-blue-600">${outputLabel}</strong> = ${expr}`;
+                    booleanContent.appendChild(el);
+                });
+            }
+            
+            function updateTruthTablePanel() {
+                const inputs = components.filter(c => c.type === 'INPUT_SWITCH').sort((a, b) => a.label.localeCompare(b.label));
+                const outputs = components.filter(c => c.type === 'OUTPUT_BULB').sort((a, b) => a.label.localeCompare(b.label));
+                
+                if (inputs.length === 0 || outputs.length === 0) {
+                    truthtableContent.innerHTML = 'Add at least one Input Switch and one Output Bulb.';
+                    return;
+                }
+                
+                if (inputs.length > 8) { // Prevent freezing browser
+                    truthtableContent.innerHTML = 'Too many inputs (max 8) to generate truth table.';
+                    return;
+                }
+
+                // Backup current input values
+                const originalInputValues = new Map(inputs.map(c => [c.id, c.value]));
+
+                const table = document.createElement('table');
+                table.className = 'w-full text-left border-collapse';
+                
+                // Headers
+                const thead = table.createTHead();
+                thead.className = 'bg-slate-100';
+                const hr = thead.insertRow();
+                inputs.forEach(c => {
+                    const th = document.createElement('th');
+                    th.className = 'p-2 border border-slate-200 text-slate-700 font-semibold';
+                    th.textContent = c.label;
+                    hr.appendChild(th);
+                });
+                outputs.forEach(c => {
+                    const th = document.createElement('th');
+                    th.className = 'p-2 border border-slate-200 text-blue-700 font-semibold';
+                    th.textContent = c.label;
+                    hr.appendChild(th);
+                });
+                
+                // Body
+                const tbody = table.createTBody();
+                const numRows = Math.pow(2, inputs.length);
+                
+                for (let i = 0; i < numRows; i++) {
+                    const tr = tbody.insertRow();
+                    tr.className = 'odd:bg-white even:bg-slate-50';
+                    
+                    // Set input values for this row
+                    for (let j = 0; j < inputs.length; j++) {
+                        const inputComponent = inputs[j];
+                        // (i >> (inputs.length - 1 - j)) & 1  ->  e.g., for 3 inputs, j=0: (i>>2)&1, j=1: (i>>1)&1, j=2: (i>>0)&1
+                        const val = (i >> (inputs.length - 1 - j)) & 1;
+                        inputComponent.value = val;
+                        inputComponent.outputs[0].value = val;
+                        
+                        const td = tr.insertCell();
+                        td.className = 'p-2 border border-slate-200 text-center font-mono';
+                        td.textContent = val;
+                    }
+                    
+                    // Propagate logic *synchronously* for this state
+                    // We can just call the regular propagate, but we *don't re-render*
+                    // NOTE: This modifies the main state, but we restore it after
+                    propagateLogicSynchronous();
+                    
+                    // Read output values
+                    outputs.forEach(out => {
+                        const val = out.inputs[0].value;
+                        const td = tr.insertCell();
+                        td.className = 'p-2 border border-slate-200 text-center font-mono font-bold';
+                        td.textContent = val;
+                        td.classList.toggle('text-green-600', val === 1);
+                        td.classList.toggle('text-red-600', val === 0);
+                    });
+                }
+                
+                truthtableContent.innerHTML = '';
+                truthtableContent.appendChild(table);
+
+                // Restore original input values
+                originalInputValues.forEach((val, id) => {
+                    const c = findComponent(id);
+                    if (c) {
+                        c.value = val;
+                        c.outputs[0].value = val;
+                    }
+                });
+                propagateLogic(); // Propagate back to original state and re-render
+            }
+            
+            // A non-rendering version of propagate for truth table
+            function propagateLogicSynchronous() {
+                const componentMap = new Map(components.map(c => [c.id, c]));
+                const inDegree = new Map();
+                const nodeToComponent = new Map();
+                
+                components.forEach(c => {
+                    if (c.type !== 'INPUT_SWITCH') {
+                        let connectedInputs = 0;
+                        c.inputs.forEach(inNode => {
+                            if (inNode.sourceComponentId) connectedInputs++;
+                            nodeToComponent.set(inNode.id, c);
+                        });
+                        inDegree.set(c.id, connectedInputs);
+                        c.outputs.forEach(outNode => outNode.value = null);
+                    }
+                });
+
+                const adj = new Map();
+                wires.forEach(w => {
+                    if (!adj.has(w.fromNodeId)) adj.set(w.fromNodeId, []);
+                    adj.get(w.fromNodeId).push(w.toNodeId);
+                });
+
+                const queue = components.filter(c => c.type === 'INPUT_SWITCH');
+                
+                let iteration = 0;
+                const maxIterations = components.length * components.length;
+
+                while (queue.length > 0 && iteration < maxIterations) {
+                    iteration++;
+                    const c = queue.shift();
+                    
+                    if (c.type !== 'INPUT_SWITCH') {
+                        const def = COMPONENT_DEFS[c.type];
+                        const inputValues = c.inputs.map(inNode => inNode.value);
+                        
+                        if (inputValues.every(v => v !== null)) {
+                            const result = def.logic(...inputValues);
+                            c.outputs.forEach(outNode => outNode.value = result);
+                        } else {
+                            c.outputs.forEach(outNode => outNode.value = null);
+                        }
+                    }
+                    
+                    c.outputs.forEach(outNode => {
+                        const targetInputNodes = adj.get(outNode.id) || [];
+                        targetInputNodes.forEach(inNodeId => {
+                            const targetComponent = nodeToComponent.get(inNodeId);
+                            if (targetComponent) {
+                                const inputNode = targetComponent.inputs.find(n => n.id === inNodeId);
+                                if (inputNode) inputNode.value = outNode.value;
+                                
+                                const currentInDegree = inDegree.get(targetComponent.id) - 1;
+                                inDegree.set(targetComponent.id, currentInDegree);
+                                
+                                if (currentInDegree === 0) {
+                                    queue.push(targetComponent);
+                                }
+                            }
+                        });
+                    });
+                }
+            }
+            
+
+            // --- 9. UTILITY FUNCTIONS ---
+            
+            function findComponent(id) {
+                return components.find(c => c.id === id);
+            }
+            
+            function findNode(componentId, nodeId) {
+                const c = findComponent(componentId);
+                if (!c) return null;
+                const inNode = c.inputs.find(n => n.id === nodeId);
+                if (inNode) return inNode;
+                return c.outputs.find(n => n.id === nodeId) || null;
+            }
+            
+            function getAbsoluteNodePos(componentId, nodeId) {
+                const c = findComponent(componentId);
+                if (!c) return null;
+                const n = findNode(c.id, nodeId);
+                if (!n) return null;
+                return { x: c.x + n.x, y: c.y + n.y };
+            }
+
+
+            // --- 10. INITIALIZATION ---
+            
+            function init() {
+                saveHistory(); // Save initial empty state
+                render();
+            }
+            
+            init();
+
+        });
+    </script>
+
+</body>
+</html>
